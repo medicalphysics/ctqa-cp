@@ -14,7 +14,7 @@ import itertools
 
 colorTable = [QtGui.QColor(i, i, i).rgb() for i in range(256)]
 cp404_rodRadii = 1.5  # radii in mm
-cp404_minRodSpacing = 40.  # minimum rod spacing
+cp404_minRodSpacing = 25.  # minimum rod spacing
 cp404_rodSpacing = 50.  # rod spacing
 
 
@@ -105,10 +105,12 @@ def findCP404Rods(array, pixel_size, sigma=1.3, ):
 
     rod_pixel_spacing = int(cp404_minRodSpacing / px)
     array_th = array #* ((array > 300) + (array < -300))
-    edges = canny(array_th, sigma=sigma, low_threshold=300,
+    edges = canny(array_th, sigma=sigma, low_threshold=100,
                   high_threshold=500)
 
-    hough_radii = np.array([np.round(cp404_rodRadii / px), ]).astype(np.int)
+    hough_radii = np.array([np.round(cp404_rodRadii / px),
+                            np.floor(cp404_rodRadii / px),
+                            np.ceil(cp404_rodRadii / px)]).astype(np.int)
     hough_res = np.max(hough_circle(edges, hough_radii), axis=0)
 
     peaks = peak_local_max(hough_res, min_distance=rod_pixel_spacing,
@@ -121,7 +123,7 @@ def findCP404Rods(array, pixel_size, sigma=1.3, ):
         return [], []
 
     if peaks.shape[0] > 8:
-        peaks = peaks[:8,:]
+        peaks = peaks[:8, :]
 
     x, y = list(peaks[:, 0]), list(peaks[:, 1])
 
