@@ -22,9 +22,6 @@ from ctqa_cp import Version as app_version
 import numpy as np
 
 
-
-
-
 base = None
 if sys.platform == 'win32':
     base = 'Win32GUI'
@@ -35,7 +32,7 @@ else:
         sys.argv.append("build")
 
 exe = Executable(
-    script="ctqa_cp.pyw",
+    script="source/ctqa_cp.pyw",
     base=base,
     icon='Icons\\ic.ico'
     )

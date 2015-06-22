@@ -6,7 +6,7 @@ Distributed under MIT/X11 license.
 from PyQt4 import QtGui, QtCore
 import numpy as np
 import ctypes
-import os
+
 
 Colors = {
     'b': (0, 0, 255, 255),
@@ -107,7 +107,7 @@ def mkColor(*args):
         raise Exception(err)
 
     args = [r, g, b, a]
-    args = [0 if np.isnan(a) or np.isinf(a) else a for a in args]
+    args = [0 if np.isnan(c) or np.isinf(c) else c for c in args]
     args = list(map(int, args))
     return QtGui.QColor(*args)
 

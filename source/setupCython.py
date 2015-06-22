@@ -11,7 +11,7 @@ print "run with 'python setupCython.py build_ext --inplace'"
 #opt = {'build_ext': {'compiler': 'mingw32'}}
 opt = {}
 modules = cythonize("_hough_transform.pyx")
-setup(name='test',
+setup(name='ctqa_cp',
       ext_modules=modules,
       include_dirs=np.get_include(),
       options=opt)

@@ -366,6 +366,73 @@ def sliceThickness(arrays, uids, pos, dz, dxdy, orientation, centerInd, ID):
 
 
 @logger
+def sliceThickness3D(arrays, uids, pos, dz, dxdy, orientation, centerInd, ID):
+    d15 = np.rint(12.5 / dxdy)
+    d30 = np.rint(30.0 / dxdy)
+    r5 = np.rint(5.0 / dxdy)
+
+    results = Analysis("Slice Thickness 3D", ID)
+    results.imageUids = uids
+    results.images['images'] = []
+    results.images['pos'] = []
+    FWHM = lambda b, bc: (b.max()+bc)/2.0
+
+    mean_thickness = []
+
+    for uid, zpos, array in zip(uids, pos, arrays):
+        center = imageTools.findCP404Center(array, dxdy)
+        center = np.rint(center)
+
+        center_test = (0 < center[0] < array.shape[0],
+                       0 < center[1] < array.shape[1])
+        if not center_test[0] or not center_test[1]:
+            continue
+
+        results.imageUids.append(uid)
+        results.images['images'].append(array)
+        results.images['pos'].append(zpos)
+
+        q1 = array[center[0] - d30 - d15: center[0] - d30,
+                   center[1] - d30: center[1] + d30]
+        q2 = array[center[0] - d30: center[0] + d30,
+                   center[1] + d30: center[1] + d30 + d15]
+        q3 = array[center[0] + d30: center[0] + d30 + d15,
+                   center[1] - d30: center[1] + d30]
+        q4 = array[center[0] - d30: center[0] + d30,
+                   center[1] - d30 - d15: center[1] - d30]
+
+        bcInd = imageTools.circleIndices(array.shape, r5, center)
+        bc = array[bcInd].mean()
+
+        q = [q1, q2, q3, q4]
+
+        p = [qq > FWHM(qq, bc) for qq in q]
+
+        lenghts = np.empty(4, dtype=np.float)
+
+        lenghts[0] = np.count_nonzero(p[0].sum(axis=0))
+        lenghts[0] *= dxdy * np.tan(np.deg2rad(23))
+        lenghts[1] = np.count_nonzero(p[1].sum(axis=1))
+        lenghts[1] *= dxdy * np.tan(np.deg2rad(23))
+        lenghts[2] = np.count_nonzero(p[2].sum(axis=0))
+        lenghts[2] *= dxdy * np.tan(np.deg2rad(23))
+        lenghts[3] = np.count_nonzero(p[3].sum(axis=1))
+        lenghts[3] *= dxdy * np.tan(np.deg2rad(23))
+
+        mean_thickness.append((zpos, lenghts.mean(), lenghts.std()))
+
+    x, y, ysd = zip(*mean_thickness)
+    results.plots['Measured'] = {'x': x, 'y': y, 'yerr': ysd, 'dots': True,
+                                 'color': 'b', 'size': 7}
+
+    results.plots['Nominal'] = {'x': [x[0] * 1.1, x[-1]*1.1], 'y': [dz, dz],
+                                'color': 'r', 'size': 2}
+    results.plotLabels[0] = 'Slice thickness [mm]'
+    results.plotLabels[2] = 'Image position [mm]'
+    return results
+
+
+@logger
 def nps(arrays, uids, pos, dz, dxdy, orientation, centerInd, ID):
     radii = [50. / dxdy, 25. / dxdy]
     angles = [np.linspace(0, 2*np.pi * (1.-1./20.), 20)]

@@ -15,6 +15,7 @@ import numpy as np
 from dataImporter import validTags
 from analysisMethods import pixelSize, HUlinarity, sliceThickness, noise
 from analysisMethods import homogeneity, nps, mtfFT3D, lcd, mtf1D
+from analysisMethods import sliceThickness3D
 import imageTools
 
 
@@ -39,7 +40,8 @@ PhantomLimits = {401: 10., 528: 15., 486: 20., 515: 10, }
 def analysisMethods(phantomPosition):
     m = {401: [(pixelSize, 0., 0.),
                (HUlinarity, 0., 0.),
-               (sliceThickness, 0., 0.)],
+               (sliceThickness, 0., 0.),
+               (sliceThickness3D, -7., 7.)],
          486: [(noise,
                 phantomPosition[486] - 15.,
                 phantomPosition[486] + 15.
