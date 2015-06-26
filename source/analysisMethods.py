@@ -879,185 +879,241 @@ def mtfFT3D(arrays, uids, pos, dz, dxdy, centerInd, orientation, ID,
 
 
 @logger
-def mtf1D(arrays, uids, pos, dz, dxdy, centerInd, orientation, ID,
-          threshold=700):
+def mtfWire(arrays, uids, pos, dz, dxdy, centerInd, orientation, ID,
+          threshold=300):
     arr = np.rollaxis(np.array(arrays), 0, 3)
     cmx, cmy, cmz = np.rint(imageTools.massCenter(arr > -300))
+
     # testing for big enought image
-    result = Analysis('MTF1D(Experimental)', ID)
+    result = Analysis('MTFWire(Experimental)', ID)
     result.warning = "This analysis is experimental and "
     result.warning += "results may not be reproducible"
     if 80. / dxdy > min(arr.shape[:2]):
         result.success = False
-        result.message = "Could not locate Tungsten bead"
+        result.message = "Could not locate steel wire"
         return result
-    d40 = np.rint(40. / dxdy)
-    d20 = np.rint(10. / dxdy)
-    d10 = np.rint(10. / dxdy)
+
     d5 = np.rint(5. / dxdy)
+    d5 = 10
+    d10 = np.rint(10. / dxdy)
+    d50 = np.rint(50. / dxdy)
+    d70 = np.rint(70. / dxdy)
+    # generating mask
+    mask = np.zeros_like(arr, dtype=np.bool)
+    mask[:] = True
+    mask[cmx + d50: cmx + d70, cmy - d5: cmy + d5, :] = False
+    # masking unimportant stuff
+    arr_ma = np.ma.masked_where(mask, arr)
+    arr_sum = arr_ma.sum(axis=-1)
+    if arr_sum.max() < threshold*arr.shape[-1]*.75:
+        result.success = False
+        result.message = "Could not locate steel wire"
+        return result
 
-    mtfArr = np.copy(arr[cmx - d40: cmx + d40, cmy - d20: cmy + d20, :])
-    noiseArr = np.copy(arr[cmx - d10: cmx + d10, cmy - d10: cmy + d10, :])
-    # correction of threshold
-    thres_est = noiseArr.max() + 2 * noiseArr.std()
-    threshold = max([threshold, thres_est])
+    beadCenter = (arr_sum == arr_sum.max()).nonzero()
+    result.images['images'] = arrays
+    result.images['pos'] = pos
+    result.graphicsItems['wire'] = ('rect', beadCenter[1]-d5,
+                                    beadCenter[0] - d5, d5*2, d5*2)
+    # refining mask
+    mask[:] = True
+    mask[beadCenter[0] - d5: beadCenter[0] + d5,
+         beadCenter[1] - d5: beadCenter[1] + d5, :] = False
+    arr_ma = np.ma.masked_where(mask, arr)
+    mtfArr = np.empty((d5*2, d5*2, arr.shape[2]))
+    for i in range(mtfArr.shape[2]):
+#        import pdb; pdb.set_trace()
+        beadCenter = np.unravel_index(np.argmax(arr_ma[:, :, i]),
+                                      (arr.shape[0], arr.shape[1]))
 
-    peaks = []
-    peak_p = peak_local_max(mtfArr, min_distance=0, threshold_abs=threshold,
-                            threshold_rel=0., exclude_border=False)
-    if len(peak_p) > 0:
-        for p in peak_p:
-            if mtfArr[p[0], p[1], p[2]] > threshold:
-                peaks.append((p[2], p[0]+cmx-d40, p[1]+cmy-d20))
+        mtfArr[:, :, i] = arr[beadCenter[0] - d5: beadCenter[0] + d5,
+                              beadCenter[1] - d5: beadCenter[1] + d5, i]
 
-    if len(peaks) == 0:
-        if threshold > max([600, thres_est]):
-            return mtfFT3D(arrays, uids, pos, dz, dxdy, orientation, centerInd,
-                           ID, threshold=600)
-        elif threshold > max([500, thres_est]):
-            return mtfFT3D(arrays, uids, pos, dz, dxdy, orientation, centerInd,
-                           ID, threshold=500)
-        elif threshold > max([400, thres_est]):
-            return mtfFT3D(arrays, uids, pos, dz, dxdy, orientation, centerInd,
-                           ID, threshold=400)
-        elif threshold > max([200, thres_est]):
-            return mtfFT3D(arrays, uids, pos, dz, dxdy, orientation, centerInd,
-                           ID, threshold=200)
-        elif threshold > max([100, thres_est]):
-            return mtfFT3D(arrays, uids, pos, dz, dxdy, orientation, centerInd,
-                           ID, threshold=100)
-        else:
-            result.success = False
-            result.message = "Could not locate Tungsten bead"
-            return result
+    mtf = np.mean(mtfArr, axis=-1)
+    mtf_background = np.ma.masked_where(mtf < threshold, mtf).mean()
+    mtf -= mtf_background
+    mtf /= mtf.max()
 
-    # sorting peaks
-    peaks_s = [[peaks.pop(0)], []]
-    peaks_seed = peaks_s[0][0]
-    dist = lambda p1, p2: ((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 +
-                           (p1[2] - p2[2])**2)**.5
-    while len(peaks) > 0:
-        if dist(peaks[0], peaks_seed) > d20 / 2.:
-            peaks_s[1].append(peaks.pop(0))
-        else:
-            peaks_s[0].append(peaks.pop(0))
+    m = np.abs(np.fft.fftn(mtf))
 
-    beads = ['Bead 1', 'Bead 2']
-    kernel_l = np.int(np.rint(.1 * d10))
-    normalize = lambda mtn: (mtn - mtn[-1]) / (mtn[0] - mtn[-1])
-    plots = []
-    image = None
-    image_pos = ""
-    for ind, p_c in enumerate(peaks_s):
-        if len(p_c) == 0:
-            continue
-        # peak position
-        zind = np.sort(np.unique(np.array([x[0] for x in p_c])))
-        xind = np.sort(np.unique(np.array([x[1] for x in p_c])))
-        yind = np.sort(np.unique(np.array([x[2] for x in p_c])))
+    x, y = imageTools.fft2DRadProf(m, dxdy)
 
-        # center point
-        p = np.zeros(3, dtype=np.int)
-        p_val = 0.
-        for z in zind:
-            for y in yind:
-                for x in xind:
-                    if arr[x, y, z] > p_val:
-                        p_val = arr[x, y, z]
-                        p[:] = [x, y, z]
+    y /= y[0]
+    result.plots['mtf'] = {'x': x*10, 'y': y}
 
-        # Adding images to images containing analysis list
-        result.imageUids += [uids[z] for z in zind]
-
-        # adding image and graphics to results
-        result.graphicsItemsLabelInside[beads[ind]] = False
-        if image is not None:
-            sim = image.shape[0]
-            result.graphicsItems[beads[ind]] = ('rect', p[1]-d10/2,
-                                                p[0]-d10/2+sim, d10, d10)
-            image = np.vstack((image, np.copy(arr[:, :, p[2]])))
-            image_pos += ", " + format(pos[p[2]], '.2f')
-        else:
-            image = np.copy(arr[:, :, p[2]])
-            result.graphicsItems[beads[ind]] = ('rect', p[1]-d10/2, p[0]-d10/2,
-                                                d10, d10)
-            image_pos = format(pos[p[2]], '.2f')
-
-        # Finding MTF
-        parr = np.squeeze(np.copy(arr[p[0]-d10: p[0]+d10,
-                                      p[1]-d10 + 1: p[1]+d10 + 1, p[2]]))
-
-        mask = imageTools.circleMask(parr.shape, d10/2)
-        background = np.ma.masked_where(mask, parr)
-
-        pool = np.mean(background)
-        parr -= pool
-        noise = np.std(background)
-        parr[parr < -noise] = -noise
-
-        center = np.unravel_index(np.argmax(parr), parr.shape)
-        l1 = parr[center[0], center[1] - d5: center[1] + d5].ravel()
-        l2 = parr[center[0] - d5: center[0] + d5, center[1]].ravel()
-
-        fft = np.abs(np.fft.fft(l1, 128)) + np.abs(np.fft.fft(l2, 128))
-
-        freq = np.fft.fftfreq(len(fft), dxdy)
-        x = freq[freq >= 0]
-        y = fft[freq >= 0]
-
-        if kernel_l > 3:
-            kernel_l = 3
-        if kernel_l >= 2:
-            kernel = np.ones(kernel_l) / kernel_l
-            f, b = np.ones(kernel_l) * y[0], np.ones(kernel_l) * y[-1]
-            yc = np.convolve(np.hstack((f, y, b)), kernel,
-                             mode='same')[kernel_l: -kernel_l]
-            ys = normalize(yc)
-        else:
-            ys = normalize(y)
-        plots.append((x[:] * 10., ys[:]))
-
-    # Cleaning and adding results
-
-    # Adding image to result
-    result.images['images'] = [image]
-    result.images['pos'] = [image_pos]
-    # Adding table and plots
     result.dataTable = [['MTF (ll/cm)'], ['50%'], ['10%'], ['2%']]
-    if len(plots) > 1:
-        colors = ['b', 'r']
-        for indc, plot in enumerate(plots):
-            name = beads[indc]
-            freq, mtf = plot
-            mtfV = [.5, .1, .02]
-            mtf50, mtf10, mtf2 = [mtfFT2Dinterpy(freq, mtf, v) for v in mtfV]
-
-            result.plots[name] = {'x': freq, 'y': mtf, 'size': 2,
-                                  'color': colors[indc % len(colors)]}
-            result.dataTable[0] += [name]
-            result.dataTable[1] += [format(mtf50, '.4f')]
-            result.dataTable[2] += [format(mtf10, '.4f')]
-            result.dataTable[3] += [format(mtf2, '.4f')]
-    else:
-        freq, mtf = plots[0]
-        mtfV = [.5, .1, .02]
-        mtf50, mtf10, mtf2 = [mtfFT2Dinterpy(freq, mtf, v) for v in mtfV]
-
-        plotText = []
-        for ind, mtfp in enumerate([mtf50, mtf10, mtf2]):
-            if mtfp >= 0.0:
-                plotText.append((mtfp, mtfV[ind], format(mtfV[ind], '.2f')))
-
-        result.plots['Bead'] = {'x': freq, 'y': mtf, 'size': 2, 'color': 'k'}
-        if len(plotText) > 0:
-            result.plots['Bead']['plotText'] = plotText
-            result.plots['Bead']['plotTextAlignment'] = 'centerRight'
-        result.dataTable[0] += ['Bead']
-        result.dataTable[1] += [format(mtf50, '.4f')]
-        result.dataTable[2] += [format(mtf10, '.4f')]
-        result.dataTable[3] += [format(mtf2, '.4f')]
+    mtf50, mtf10, mtf2 = [mtfFT2Dinterpy(x*10, y, v) for v in [.5, .1, .02]]
+    result.dataTable[0] += ['Bead']
+    result.dataTable[1] += [format(mtf50, '.4f')]
+    result.dataTable[2] += [format(mtf10, '.4f')]
+    result.dataTable[3] += [format(mtf2, '.4f')]
     result.plotLabels = {0: 'MTF (AU)', 2: 'll/cm'}
+    result.graphicsItemsLabelInside['wire'] = False
+#    pdb.set_trace()
     return result
+
+#    mtfArr = np.copy(arr[cmx - d40: cmx + d40, cmy - d20: cmy + d20, :])
+#    noiseArr = np.copy(arr[cmx - d10: cmx + d10, cmy - d10: cmy + d10, :])
+#    # correction of threshold
+#    thres_est = noiseArr.max() + 2 * noiseArr.std()
+#    threshold = max([threshold, thres_est])
+#
+#    peaks = []
+#    peak_p = peak_local_max(mtfArr, min_distance=0, threshold_abs=threshold,
+#                            threshold_rel=0., exclude_border=False)
+#    if len(peak_p) > 0:
+#        for p in peak_p:
+#            if mtfArr[p[0], p[1], p[2]] > threshold:
+#                peaks.append((p[2], p[0]+cmx-d40, p[1]+cmy-d20))
+#
+#    if len(peaks) == 0:
+#        if threshold > max([600, thres_est]):
+#            return mtfFT3D(arrays, uids, pos, dz, dxdy, orientation, centerInd,
+#                           ID, threshold=600)
+#        elif threshold > max([500, thres_est]):
+#            return mtfFT3D(arrays, uids, pos, dz, dxdy, orientation, centerInd,
+#                           ID, threshold=500)
+#        elif threshold > max([400, thres_est]):
+#            return mtfFT3D(arrays, uids, pos, dz, dxdy, orientation, centerInd,
+#                           ID, threshold=400)
+#        elif threshold > max([200, thres_est]):
+#            return mtfFT3D(arrays, uids, pos, dz, dxdy, orientation, centerInd,
+#                           ID, threshold=200)
+#        elif threshold > max([100, thres_est]):
+#            return mtfFT3D(arrays, uids, pos, dz, dxdy, orientation, centerInd,
+#                           ID, threshold=100)
+#        else:
+#            result.success = False
+#            result.message = "Could not locate Tungsten bead"
+#            return result
+#
+#    # sorting peaks
+#    peaks_s = [[peaks.pop(0)], []]
+#    peaks_seed = peaks_s[0][0]
+#    dist = lambda p1, p2: ((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 +
+#                           (p1[2] - p2[2])**2)**.5
+#    while len(peaks) > 0:
+#        if dist(peaks[0], peaks_seed) > d20 / 2.:
+#            peaks_s[1].append(peaks.pop(0))
+#        else:
+#            peaks_s[0].append(peaks.pop(0))
+#
+#    beads = ['Bead 1', 'Bead 2']
+#    kernel_l = np.int(np.rint(.1 * d10))
+#    normalize = lambda mtn: (mtn - mtn[-1]) / (mtn[0] - mtn[-1])
+#    plots = []
+#    image = None
+#    image_pos = ""
+#    for ind, p_c in enumerate(peaks_s):
+#        if len(p_c) == 0:
+#            continue
+#        # peak position
+#        zind = np.sort(np.unique(np.array([x[0] for x in p_c])))
+#        xind = np.sort(np.unique(np.array([x[1] for x in p_c])))
+#        yind = np.sort(np.unique(np.array([x[2] for x in p_c])))
+#
+#        # center point
+#        p = np.zeros(3, dtype=np.int)
+#        p_val = 0.
+#        for z in zind:
+#            for y in yind:
+#                for x in xind:
+#                    if arr[x, y, z] > p_val:
+#                        p_val = arr[x, y, z]
+#                        p[:] = [x, y, z]
+#
+#        # Adding images to images containing analysis list
+#        result.imageUids += [uids[z] for z in zind]
+#
+#        # adding image and graphics to results
+#        result.graphicsItemsLabelInside[beads[ind]] = False
+#        if image is not None:
+#            sim = image.shape[0]
+#            result.graphicsItems[beads[ind]] = ('rect', p[1]-d10/2,
+#                                                p[0]-d10/2+sim, d10, d10)
+#            image = np.vstack((image, np.copy(arr[:, :, p[2]])))
+#            image_pos += ", " + format(pos[p[2]], '.2f')
+#        else:
+#            image = np.copy(arr[:, :, p[2]])
+#            result.graphicsItems[beads[ind]] = ('rect', p[1]-d10/2, p[0]-d10/2,
+#                                                d10, d10)
+#            image_pos = format(pos[p[2]], '.2f')
+#
+#        # Finding MTF
+#        parr = np.squeeze(np.copy(arr[p[0]-d10: p[0]+d10,
+#                                      p[1]-d10 + 1: p[1]+d10 + 1, p[2]]))
+#
+#        mask = imageTools.circleMask(parr.shape, d10/2)
+#        background = np.ma.masked_where(mask, parr)
+#
+#        pool = np.mean(background)
+#        parr -= pool
+#        noise = np.std(background)
+#        parr[parr < -noise] = -noise
+#
+#        center = np.unravel_index(np.argmax(parr), parr.shape)
+#        l1 = parr[center[0], center[1] - d5: center[1] + d5].ravel()
+#        l2 = parr[center[0] - d5: center[0] + d5, center[1]].ravel()
+#
+#        fft = np.abs(np.fft.fft(l1, 128)) + np.abs(np.fft.fft(l2, 128))
+#
+#        freq = np.fft.fftfreq(len(fft), dxdy)
+#        x = freq[freq >= 0]
+#        y = fft[freq >= 0]
+#
+#        if kernel_l > 3:
+#            kernel_l = 3
+#        if kernel_l >= 2:
+#            kernel = np.ones(kernel_l) / kernel_l
+#            f, b = np.ones(kernel_l) * y[0], np.ones(kernel_l) * y[-1]
+#            yc = np.convolve(np.hstack((f, y, b)), kernel,
+#                             mode='same')[kernel_l: -kernel_l]
+#            ys = normalize(yc)
+#        else:
+#            ys = normalize(y)
+#        plots.append((x[:] * 10., ys[:]))
+#
+#    # Cleaning and adding results
+#
+#    # Adding image to result
+#    result.images['images'] = [image]
+#    result.images['pos'] = [image_pos]
+#    # Adding table and plots
+#    result.dataTable = [['MTF (ll/cm)'], ['50%'], ['10%'], ['2%']]
+#    if len(plots) > 1:
+#        colors = ['b', 'r']
+#        for indc, plot in enumerate(plots):
+#            name = beads[indc]
+#            freq, mtf = plot
+#            mtfV = [.5, .1, .02]
+#            mtf50, mtf10, mtf2 = [mtfFT2Dinterpy(freq, mtf, v) for v in mtfV]
+#
+#            result.plots[name] = {'x': freq, 'y': mtf, 'size': 2,
+#                                  'color': colors[indc % len(colors)]}
+#            result.dataTable[0] += [name]
+#            result.dataTable[1] += [format(mtf50, '.4f')]
+#            result.dataTable[2] += [format(mtf10, '.4f')]
+#            result.dataTable[3] += [format(mtf2, '.4f')]
+#    else:
+#        freq, mtf = plots[0]
+#        mtfV = [.5, .1, .02]
+#        mtf50, mtf10, mtf2 = [mtfFT2Dinterpy(freq, mtf, v) for v in mtfV]
+#
+#        plotText = []
+#        for ind, mtfp in enumerate([mtf50, mtf10, mtf2]):
+#            if mtfp >= 0.0:
+#                plotText.append((mtfp, mtfV[ind], format(mtfV[ind], '.2f')))
+#
+#        result.plots['Bead'] = {'x': freq, 'y': mtf, 'size': 2, 'color': 'k'}
+#        if len(plotText) > 0:
+#            result.plots['Bead']['plotText'] = plotText
+#            result.plots['Bead']['plotTextAlignment'] = 'centerRight'
+#        result.dataTable[0] += ['Bead']
+#        result.dataTable[1] += [format(mtf50, '.4f')]
+#        result.dataTable[2] += [format(mtf10, '.4f')]
+#        result.dataTable[3] += [format(mtf2, '.4f')]
+#    result.plotLabels = {0: 'MTF (AU)', 2: 'll/cm'}
+#    return result
 
 
 @logger

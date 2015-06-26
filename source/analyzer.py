@@ -14,7 +14,7 @@ from qtutils import qStringToStr
 import numpy as np
 from dataImporter import validTags
 from analysisMethods import pixelSize, HUlinarity, sliceThickness, noise
-from analysisMethods import homogeneity, nps, mtfFT3D, lcd, mtf1D
+from analysisMethods import homogeneity, nps, mtfFT3D, lcd, mtfWire
 from analysisMethods import sliceThickness3D
 import imageTools
 
@@ -28,12 +28,13 @@ ascii_errorMessage += "processor core only.\nThis is considered a bug."
 
 
 # CatPhan phantom definitions
-PhantomPosition = {'CatPhan600': {401: 0.0, 528: 70., 486: 160., 515: 110., },
+PhantomPosition = {'CatPhan600': {401: 0.0, 528: 70., 486: 160., 515: 110.,
+                                  591: 32.5 },
                    'CatPhan504': {401: 0.0, 528: -30.0, 486: 80, 515:  70.}
                    }
 
 
-PhantomLimits = {401: 10., 528: 15., 486: 20., 515: 10, }
+PhantomLimits = {401: 10., 528: 15., 486: 20., 515: 10, 591: 20}
 
 
 # analysis methods available and phantom limits to be included for the analysis
@@ -69,6 +70,10 @@ def analysisMethods(phantomPosition):
                 ),
                ],
          }
+    if 591 in phantomPosition:
+        m[591] = [(mtfWire,
+                   phantomPosition[591] - 15,
+                   phantomPosition[591] + 15)]
     return m
 
 
