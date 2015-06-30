@@ -6,7 +6,7 @@ Created on Tue Apr 23 10:04:59 2013
 """
 from __future__ import unicode_literals
 
-Version = '0.3.3'
+Version = '0.3.2'
 USE_THREADS = True  # False for debug
 
 import sys
