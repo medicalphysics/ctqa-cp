@@ -215,11 +215,20 @@ class Analyzer(QtCore.QObject):
     lock = QtCore.QMutex()
 
     def __init__(self, parent=None):
+
         super(Analyzer, self).__init__(parent)
+
+        n_cpu = cpu_count()
+        if not n_cpu:
+            n_cpu = 6
+        else:
+            n_cpu += 2
+
+
         self.data_queue = Queue()
         self.stop_queue = Queue()
         self.setup_queue = Queue()
-        self.result_queue = Queue()
+        self.result_queue = Queue(n_cpu)
         self.processes = []
 
 

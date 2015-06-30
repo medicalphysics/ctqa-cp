@@ -911,11 +911,20 @@ def mtfWire(arrays, uids, pos, dz, dxdy, centerInd, orientation, ID,
         return result
 
     beadCenter = (arr_sum == arr_sum.max()).nonzero()
-    result.images['images'] = arrays
-    result.images['pos'] = pos
     result.graphicsItems['wire'] = ('rect', beadCenter[1]-d5,
                                     beadCenter[0] - d5, d5*2, d5*2)
-    # refining mask
+
+    arr_z = arr_ma.max(axis=0).max(axis=0)
+    ind = arr_z > threshold
+    result.images = {'images': [], 'pos': []}
+    for i, ii in enumerate(ind):
+        if ii:
+            result.images['images'].append(arrays[i])
+            result.images['pos'].append(pos[i])
+            result.imageUids.append(uids[i])
+
+    arr = arr[:, :, ind]
+    mask = np.zeros_like(arr, dtype=np.bool)
     mask[:] = True
     mask[beadCenter[0] - d5: beadCenter[0] + d5,
          beadCenter[1] - d5: beadCenter[1] + d5, :] = False
