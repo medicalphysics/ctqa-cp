@@ -14,7 +14,7 @@ import itertools
 
 colorTable = [QtGui.QColor(i, i, i).rgb() for i in range(256)]
 cp404_rodRadii = 1.5  # radii in mm
-cp404_minRodSpacing = 25.  # minimum rod spacing
+cp404_minRodSpacing = 45.  # minimum rod spacing
 cp404_rodSpacing = 50.  # rod spacing
 
 
@@ -88,7 +88,7 @@ def peak_sort(p, px):
     return [], []
 
 
-def findCP404Rods(array, pixel_size, sigma=1.3, ):
+def findCP404Rods(array, pixel_size, sigma=1.3, threshold=600):
     """Attempts to find rods in a image
     Input: array (2D numpy array) with valid hounsfiled units
            pixel_size (tuple of pixel size in x and y dim)
@@ -100,13 +100,14 @@ def findCP404Rods(array, pixel_size, sigma=1.3, ):
             return [], []
     else:
         return [], []
-
+    if threshold < 300:
+        return [], []
     px = pixel_size
 
     rod_pixel_spacing = int(cp404_minRodSpacing / px)
-    array_th = array #* ((array > 300) + (array < -300))
-    edges = canny(array_th, sigma=sigma, low_threshold=100,
-                  high_threshold=500)
+    array_th = np.abs(array) > threshold
+    edges = canny(array_th.astype(np.float), sigma=sigma, low_threshold=.5,
+                  high_threshold=.95)
 
     hough_radii = np.array([np.round(cp404_rodRadii / px),
                             np.floor(cp404_rodRadii / px),
@@ -117,10 +118,12 @@ def findCP404Rods(array, pixel_size, sigma=1.3, ):
                            threshold_abs=.50, num_peaks=30)
 
     if len(peaks) == 0:
-        return [], []
+        return findCP404Rods(array, pixel_size, sigma=1.3,
+                             threshold=threshold-100)
 
     if peaks.shape[0] < 4:
-        return [], []
+        return findCP404Rods(array, pixel_size, sigma=1.3,
+                             threshold=threshold-100)
 
     if peaks.shape[0] > 8:
         peaks = peaks[:8, :]
@@ -144,75 +147,6 @@ def findCP404Rods(array, pixel_size, sigma=1.3, ):
     x_a = np.array(x_s)
     y_a = np.array(y_s)
     return peak_sort(np.vstack((x_a, y_a)), px)
-
-
-def findCP404Rods_oldVersion(array, pixel_size, sigma=1.3):
-    """Attempts to find rods in a image
-    Input: array (2D numpy array) with valid hounsfiled units
-           pixel_size (tuple of pixel size in x and y dim)
-    Output: rod coordinated numpy array with shape (2, 4)
-        returns -1 for rod indexes if they are not found
-    """
-    if sigma:
-        if sigma < .3:
-            return [], []
-    else:
-        return [], []
-
-    px = pixel_size
-
-    rod_pixel_spacing = int(cp404_minRodSpacing / px)
-    array_th = array * ((array > 300) + (array < -300))
-    edges = canny(array_th, sigma=sigma, low_threshold=300,
-                  high_threshold=500)
-
-    hough_radii = np.array([np.round(cp404_rodRadii / px), ]).astype(np.int)
-    hough_res = np.max(hough_circle(edges, hough_radii), axis=0)
-
-    peaks = peak_local_max(hough_res, min_distance=rod_pixel_spacing,
-                           threshold_rel=.45, num_peaks=30)
-
-    if len(peaks) == 0:
-        return [], []
-
-    if peaks.shape[0] < 4:
-        return [], []
-
-    x, y = list(peaks[:, 0]), list(peaks[:, 1])
-
-    # sorting out neighboring peaks
-    x_s, y_s = [x.pop(0)], [y.pop(0)]
-    while len(x_s) < 4 and len(x) > 0:
-        x_c, y_c = x.pop(0), y.pop(0)
-        dist = [((x_c-xi)**2 + (y_c-yi)**2)**.5 > rod_pixel_spacing
-                for xi, yi in zip(x_s, y_s)]
-        if all(dist):
-            x_s.append(x_c)
-            y_s.append(y_c)
-
-    if len(x_s) != 4:
-        return [], []
-    # returning rods sorted by angle from center
-    x_a = np.array(x_s)
-    y_a = np.array(y_s)
-    ang = np.argsort(np.nan_to_num(np.arctan2(x_a - x_a.mean(),
-                                              y_a - y_a.mean())))
-    rods = np.vstack((x_a, y_a))[:, ang]
-
-    # test for rods forming a square
-    a = rods[:, 0]
-    ab = rods[:, 1] - a
-    ac = rods[:, 3] - a
-    metric = np.sqrt(np.sum((a + ab + ac - rods[:, 2])**2))
-    if metric * px > 5.:
-        return [], []
-    # test distance
-    ind = [0, 1, 2, 3, 0]
-    for i in range(4):
-        d = np.sum((rods[:, ind[i]] - rods[:, ind[i+1]])**2)**.5
-        if np.abs(d - cp404_rodSpacing / px) > 5.:
-            return [], []
-    return rods[0, :].ravel(), rods[1, :].ravel()
 
 
 def arrayToQImage(array, WC=0, WW=500):

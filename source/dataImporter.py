@@ -329,6 +329,8 @@ class DataImporter(QtCore.QObject):
             ncpu = cpu_count()
             if ncpu < 1:
                 ncpu = 1
+            else:
+                ncpu -= 1
 
             processes = []
             for _ in range(ncpu):

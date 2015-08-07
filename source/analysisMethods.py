@@ -388,6 +388,22 @@ def sliceThickness3D(arrays, uids, pos, dz, dxdy, orientation, centerInd, ID):
         if not center_test[0] or not center_test[1]:
             continue
 
+        if zpos == pos[0]:
+            b = []
+            b.append(('rect', center[1] - d30, center[0] - d30 - d15, 2 * d30,
+                      d15))
+            b.append(('rect', center[1] + d30, center[0] - d30, d15,  2 * d30))
+            b.append(('rect', center[1] - d30, center[0] + d30, 2 * d30, d15))
+            b.append(('rect', center[1] - d30 - d15, center[0] - d30, d15,
+                      2 * d30))
+            for ii, bb in enumerate(b):
+                label = "Region {0}".format(ii+1)
+                results.graphicsItems[label] = bb
+                results.graphicsItemsLabelInside[label] = False
+            results.graphicsItems['Background'] = ('circle', center[1] - r5,
+                                                   center[0] - r5, r5 * 2,
+                                                   r5 * 2)
+
         results.imageUids.append(uid)
         results.images['images'].append(array)
         results.images['pos'].append(zpos)
@@ -420,6 +436,11 @@ def sliceThickness3D(arrays, uids, pos, dz, dxdy, orientation, centerInd, ID):
         lenghts[3] *= dxdy * np.tan(np.deg2rad(23))
 
         mean_thickness.append((zpos, lenghts.mean(), lenghts.std()))
+
+
+
+
+
 
     x, y, ysd = zip(*mean_thickness)
     results.plots['Measured'] = {'x': x, 'y': y, 'yerr': ysd, 'dots': True,

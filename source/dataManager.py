@@ -106,6 +106,11 @@ class Series(BaseItem):
                     qdate = QtCore.QDate(int(date[:4]), int(date[4:6]),
                                          int(date[6:]))
                     self.displayData.append(qdate.toString("ddd dd.MM.yyyy"))
+                elif tag == extraTags['seriesTime']:
+                    time = str(data[tag])
+                    qtime = QtCore.QTime(int(time[:2]), int(time[2:4]),
+                                         int(time[4:6]))
+                    self.displayData.append(qtime.toString("hh:mm:ss"))
                 elif tag == extraTags['seriesDescription']:
                     if tag not in data:
                         self.displayData.append(QtCore.QString("Series"))
@@ -391,6 +396,7 @@ class DataManager(QtCore.QObject):
 
         self.headerTags = [extraTags['seriesDescription'],
                            extraTags['seriesDate'],
+                           extraTags['seriesTime'],
                            extraTags['seriesNumber'],
                            validTags['aqusitionNumber'],
                            validTags['patientID']]
