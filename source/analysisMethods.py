@@ -437,19 +437,15 @@ def sliceThickness3D(arrays, uids, pos, dz, dxdy, orientation, centerInd, ID):
 
         mean_thickness.append((zpos, lenghts.mean(), lenghts.std()))
 
-
-
-
-
-
-    x, y, ysd = zip(*mean_thickness)
-    results.plots['Measured'] = {'x': x, 'y': y, 'yerr': ysd, 'dots': True,
-                                 'color': 'b', 'size': 7}
-
-    results.plots['Nominal'] = {'x': [x[0] * 1.1, x[-1]*1.1], 'y': [dz, dz],
-                                'color': 'r', 'size': 2}
-    results.plotLabels[0] = 'Slice thickness [mm]'
-    results.plotLabels[2] = 'Image position [mm]'
+    if len(mean_thickness) > 0:
+        x, y, ysd = zip(*mean_thickness)
+        results.plots['Measured'] = {'x': x, 'y': y, 'yerr': ysd, 'dots': True,
+                                     'color': 'b', 'size': 7}
+    
+        results.plots['Nominal'] = {'x': [x[0] * 1.1, x[-1]*1.1], 
+                                    'y': [dz, dz], 'color': 'r', 'size': 2}
+        results.plotLabels[0] = 'Slice thickness [mm]'
+        results.plotLabels[2] = 'Image position [mm]'
     return results
 
 

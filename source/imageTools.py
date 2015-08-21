@@ -100,7 +100,7 @@ def findCP404Rods(array, pixel_size, sigma=1.3, threshold=600):
             return [], []
     else:
         return [], []
-    if threshold < 300:
+    if threshold < 200:
         return [], []
     px = pixel_size
 
@@ -118,11 +118,11 @@ def findCP404Rods(array, pixel_size, sigma=1.3, threshold=600):
                            threshold_abs=.50, num_peaks=30)
 
     if len(peaks) == 0:
-        return findCP404Rods(array, pixel_size, sigma=1.3,
+        return findCP404Rods(array, pixel_size, sigma=sigma,
                              threshold=threshold-100)
 
     if peaks.shape[0] < 4:
-        return findCP404Rods(array, pixel_size, sigma=1.3,
+        return findCP404Rods(array, pixel_size, sigma=sigma,
                              threshold=threshold-100)
 
     if peaks.shape[0] > 8:
@@ -141,7 +141,8 @@ def findCP404Rods(array, pixel_size, sigma=1.3, threshold=600):
             y_s.append(y_c)
 
     if len(x_s) < 4:
-        return [], []
+        return findCP404Rods(array, pixel_size, sigma=sigma,
+                             threshold=threshold-100)
 
     # returning rods sorted by angle from center
     x_a = np.array(x_s)
