@@ -68,7 +68,7 @@ includefiles = []#('path2python\\Lib\\site-packages\\scipy\\special\\_ufuncs.pyd
 #includes = ['skimage.draw', 'skimage.draw._draw','skimage._shared.geometry','scipy.sparse','skimage.filter','skimage.feature',
 #            'scipy.ndimage','scipy.special', 'scipy.linalg', 'scipy.integrate']#,'scipy.special._ufuncs_cxx', 'scipy.linalg']
 includes = ['scipy.special', 'scipy.ndimage','scipy.linalg', 'scipy.integrate']
-includes.append()
+#includes.append()
 excludes = ['curses', 'email', 'ttk', 'PIL', 'matplotlib',]
 #            'tzdata']
 

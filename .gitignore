@@ -57,6 +57,9 @@ docs/_build/
 
 # PyBuilder
 target/
+# cx_freeze
+source/build
+source/dist
 
 # =========================
 # Operating System Files
